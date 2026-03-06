@@ -1,13 +1,12 @@
 import {getTopStoriesLite} from "@/lib/hn"
 import {TopStoryLite, StorySummary} from "@/lib/types";
 import { getCommentsByStoryId } from "@/lib/comments";
-import { summarizeStory } from "@/lib/summarize";
+import { isPlaceholderSummary, summarizeStory } from "@/lib/summarize";
 import { getStorySummary, setStorySummary } from "@/lib/cache";
 
 export default async function Home() {
   let topStories : TopStoryLite[] = await getTopStoriesLite();
-  let topStoriesWithComments: Array<TopStoryLite & { comments: Awaited<ReturnType<typeof getCommentsByStoryId>> }> = []
-  let firstStorySummary: StorySummary | null = null;
+  let topStoriesWithComments: Array<TopStoryLite & { comments: Awaited<ReturnType<typeof getCommentsByStoryId>> }> = [];
   let summaries: StorySummary[] = [];
   try {
     topStoriesWithComments = await Promise.all(topStories.map(async (story) => {
@@ -24,8 +23,12 @@ export default async function Home() {
       }
 
       const generated = await summarizeStory(item, item.comments, index + 1);
-      await setStorySummary(item.id, generated);
-      console.log("Redis miss", item.id);
+      if (isPlaceholderSummary(generated)) {
+        console.log("LLM fallback detected; skip cache write", item.id);
+      } else {
+        await setStorySummary(item.id, generated);
+        console.log("Redis miss", item.id);
+      }
       return generated;
     })
     );

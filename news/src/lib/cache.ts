@@ -13,20 +13,23 @@ export const redis = new Redis({
   token,
 });
 
+const SUMMARY_CACHE_VERSION = "v3";
+const SUMMARY_MODEL_TAG = (process.env.OPENAI_MODEL ?? "unknown-model")
+  .replace(/[^a-zA-Z0-9_-]/g, "_");
 
 export function storySummaryKey(storyId: number): string {
-    return `hn:story:${storyId}:summary:v1`;
+    return `hn:story:${storyId}:summary:${SUMMARY_CACHE_VERSION}:${SUMMARY_MODEL_TAG}`;
 }
 
 export async function getStorySummary(storyId: number): Promise<StorySummary | null> {
     const key = storySummaryKey(storyId);
-    const data = await redis.get(key);
+    const data = await redis.get<StorySummary>(key);
     if (data) {
-        return data as StorySummary;
+        return data;
     }
     return null;
 }
 
 export async function setStorySummary(storyId: number, summary: StorySummary, TTL: number = 2700): Promise<void> {
-    redis.set(storySummaryKey(storyId), summary, { ex: TTL })
+    await redis.set(storySummaryKey(storyId), summary, { ex: TTL });
 }
